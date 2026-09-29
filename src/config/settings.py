@@ -609,6 +609,11 @@ class BrainColdStartProtection:
 @dataclass
 class BrainSettings:
     """Claude Brain autonomous trading configuration."""
+    # Evidence-first Phase 1 is opt-in until out-of-sample promotion.
+    no_trade_contract_enabled: bool = False
+    validation_experiment_id: str = ""
+    validation_run_id: str = ""
+    validation_audit_dir: str = ""
     enabled: bool = False
     use_claude_code: bool = True
     strategic_interval: int = 180
@@ -6048,7 +6053,14 @@ def _build_workers(data: dict[str, Any]) -> WorkerSettings:
 
 
 def _build_brain(data: dict[str, Any]) -> BrainSettings:
+    no_trade = data.get("no_trade_contract_enabled", False)
+    if not isinstance(no_trade, bool):
+        raise ValueError("brain.no_trade_contract_enabled must be a TOML boolean")
     return BrainSettings(
+        no_trade_contract_enabled=no_trade,
+        validation_experiment_id=str(data.get("validation_experiment_id", "")),
+        validation_run_id=str(data.get("validation_run_id", "")),
+        validation_audit_dir=str(data.get("validation_audit_dir", "")),
         enabled=data.get("enabled", False),
         analysis_interval=data.get("analysis_interval", 1800),
         signal_triggered=data.get("signal_triggered", True),

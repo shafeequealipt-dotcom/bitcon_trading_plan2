@@ -259,6 +259,12 @@ open_interest_interval = "5min"
 fear_greed_minutes = 60
 
 [brain]
+# Phase 1 research trial: enable only in an isolated, versioned experiment.
+# Default false preserves the frozen control; no evidence-based promotion yet.
+no_trade_contract_enabled = false
+validation_experiment_id = ""
+validation_run_id = ""
+validation_audit_dir = ""
 # Claude Code CLI — no API key needed, no budget limit
 # Uses existing Claude Max subscription ($0 per call)
 enabled = true

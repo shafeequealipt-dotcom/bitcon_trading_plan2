@@ -10,8 +10,13 @@ from src.core.experiment import DecisionJournal, redact
 
 
 def test_redaction_nested_and_token_budget():
-    value = {"api_key": "SECRET", "nested": [{"password": "PRIVATE"}],
-             "max_tokens": 4000, "url": "https://a:b@example.com", "token": "hidden"}
+    value = {
+        "api_key": "SECRET",
+        "nested": [{"password": "PRIVATE"}],
+        "max_tokens": 4000,
+        "url": "https://a:b@example.com",
+        "token": "hidden",
+    }
     redacted = redact(value)
     assert "SECRET" not in json.dumps(redacted)
     assert "PRIVATE" not in json.dumps(redacted)
@@ -22,10 +27,15 @@ def test_redaction_nested_and_token_budget():
 
 def database(path):
     with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE trade_log (trade_id TEXT, symbol TEXT, closed_at TEXT, pnl_usd REAL)")
+        db.execute(
+            "CREATE TABLE trade_log (trade_id TEXT, symbol TEXT, closed_at TEXT, pnl_usd REAL)"
+        )
         db.execute("INSERT INTO trade_log VALUES ('x','BTCUSDT','2026-01-01',12)")
         db.execute("INSERT INTO trade_log VALUES ('open','ETHUSDT','',0)")
-        db.execute("CREATE TABLE trade_intelligence (trade_id TEXT, entry_score REAL, apex_flipped INTEGER)")
+        db.execute(
+            "CREATE TABLE trade_intelligence "
+            "(trade_id TEXT, entry_score REAL, apex_flipped INTEGER)"
+        )
         db.execute("INSERT INTO trade_intelligence VALUES ('x',80,1)")
 
 
@@ -52,9 +62,11 @@ def test_missing_db_does_not_create_file(tmp_path):
 
 
 def test_ledgers_not_silently_combined_or_guessed():
-    tables = {"trade_log": [{"trade_id": "x", "closed_at": "1", "exchange_mode": "shadow"}],
-              "trade_history": [{"trade_id": "x", "exit_time": "1"}],
-              "trade_intelligence": [{"trade_id": "x", "exchange_mode": "live"}]}
+    tables = {
+        "trade_log": [{"trade_id": "x", "closed_at": "1", "exchange_mode": "shadow"}],
+        "trade_history": [{"trade_id": "x", "exit_time": "1"}],
+        "trade_intelligence": [{"trade_id": "x", "exchange_mode": "live"}],
+    }
     rows = closed_records(tables)
     assert len(rows) == 2
     assert next(r for r in rows if r["source_table"] == "trade_log")["related_intelligence"] == []
@@ -64,8 +76,10 @@ def test_ledgers_not_silently_combined_or_guessed():
 def repo(tmp_path):
     root = tmp_path / "repo"
     root.mkdir()
+
     def run(*args):
         return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
     run("init")
     (root / "config.toml").write_text('[general]\nmode="shadow"\n[brain]\napi_key="private"\n')
     run("add", ".")
@@ -94,19 +108,32 @@ def test_capture_reproducible_and_frozen(repo, tmp_path):
 def test_dirty_checkout_rejected(repo, tmp_path):
     (repo / "change.py").write_text("# changed")
     with pytest.raises(ValueError, match="Commit"):
-        capture(repo, repo / "config.toml", tmp_path / "a", experiment_id="x", run_id="a",
-                execution_mode="shadow")
+        capture(
+            repo,
+            repo / "config.toml",
+            tmp_path / "a",
+            experiment_id="x",
+            run_id="a",
+            execution_mode="shadow",
+        )
 
 
 def config(run="a", temperature=0.3):
-    return SimpleNamespace(brain=SimpleNamespace(validation_run_id=run, temperature=temperature,
-                                                api_key="private"))
+    return SimpleNamespace(
+        brain=SimpleNamespace(validation_run_id=run, temperature=temperature, api_key="private")
+    )
 
 
 def test_journal_immutable_identity_and_config(tmp_path):
     journal = DecisionJournal(tmp_path, "p1", "a", config())
-    journal.record("decision1", prompt="market", system="control", response='{"new_trades":[]}',
-                   reason_code="NO_TRADE_WEAK_EDGE", status="success")
+    journal.record(
+        "decision1",
+        prompt="market",
+        system="control",
+        response='{"new_trades":[]}',
+        reason_code="NO_TRADE_WEAK_EDGE",
+        status="success",
+    )
     saved = json.loads((journal.path / "decision1.json").read_text())
     assert saved["experiment_id"] == "p1" and saved["run_id"] == "a"
     with pytest.raises(FileExistsError):

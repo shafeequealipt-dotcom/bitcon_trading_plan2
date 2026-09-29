@@ -2,6 +2,7 @@
 
 Missing data stays unknown. A capture is not a backtest or proof of edge.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,12 +14,20 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-TABLES = (
-    "schema_version", "trade_history", "trade_log", "trade_intelligence",
-    "strategy_trades", "ensemble_votes", "claude_decisions", "brain_decisions",
-    "orders", "regime_history",
-)
 from src.core.experiment import canonical, digest, redact
+
+TABLES = (
+    "schema_version",
+    "trade_history",
+    "trade_log",
+    "trade_intelligence",
+    "strategy_trades",
+    "ensemble_votes",
+    "claude_decisions",
+    "brain_decisions",
+    "orders",
+    "regime_history",
+)
 
 
 def git(root, *args):
@@ -33,15 +42,20 @@ def read_database(path: Path):
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA query_only=ON")
         db.execute("BEGIN")
-        schema = [dict(r) for r in db.execute(
-            "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL "
-            "ORDER BY type,name")]
+        schema = [
+            dict(r)
+            for r in db.execute(
+                "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE sql IS NOT NULL "
+                "ORDER BY type,name"
+            )
+        ]
         names = {r["name"] for r in schema if r["type"] == "table"}
         tables = {}
         for name in TABLES:
             if name in names:
-                tables[name] = sorted((dict(r) for r in db.execute(f'SELECT * FROM "{name}"')),
-                                      key=canonical)
+                tables[name] = sorted(
+                    (dict(r) for r in db.execute(f'SELECT * FROM "{name}"')), key=canonical
+                )
         db.rollback()
     return schema, tables
 
@@ -58,29 +72,52 @@ def closed_records(tables):
             if not row.get(time_key):
                 continue
             tid, mode = row.get("trade_id"), row.get("exchange_mode")
-            related = [r for r in tables.get("trade_intelligence", [])
-                       if tid and r.get("trade_id") == tid and
-                       (mode is None or r.get("exchange_mode") in (None, mode))]
-            result.append({
-                "source_table": table, "trade_id": tid, "exchange_mode": mode,
-                "symbol": row.get("symbol"), "side": row.get("side", row.get("direction")),
-                "entry_time": row.get("entry_time", row.get("opened_at")),
-                "exit_time": row[time_key], "entry_price": row.get("entry_price"),
-                "exit_price": row.get("exit_price"), "qty": row.get("qty"),
-                "size_usd": row.get("size_usd"), "leverage": row.get("leverage"),
-                "reported_pnl": row.get("pnl", row.get("pnl_usd")),
-                "net_pnl": row.get("net_pnl"), "fees": row.get("fees"),
-                "funding": row.get("funding"), "slippage": row.get("slippage"),
-                "brain_decision_id": row.get("brain_decision_id"),
-                "exit_reason": row.get("close_reason"),
-                "related_intelligence": related, "original_row": row,
-            })
+            related = [
+                r
+                for r in tables.get("trade_intelligence", [])
+                if tid
+                and r.get("trade_id") == tid
+                and (mode is None or r.get("exchange_mode") in (None, mode))
+            ]
+            result.append(
+                {
+                    "source_table": table,
+                    "trade_id": tid,
+                    "exchange_mode": mode,
+                    "symbol": row.get("symbol"),
+                    "side": row.get("side", row.get("direction")),
+                    "entry_time": row.get("entry_time", row.get("opened_at")),
+                    "exit_time": row[time_key],
+                    "entry_price": row.get("entry_price"),
+                    "exit_price": row.get("exit_price"),
+                    "qty": row.get("qty"),
+                    "size_usd": row.get("size_usd"),
+                    "leverage": row.get("leverage"),
+                    "reported_pnl": row.get("pnl", row.get("pnl_usd")),
+                    "net_pnl": row.get("net_pnl"),
+                    "fees": row.get("fees"),
+                    "funding": row.get("funding"),
+                    "slippage": row.get("slippage"),
+                    "brain_decision_id": row.get("brain_decision_id"),
+                    "exit_reason": row.get("close_reason"),
+                    "related_intelligence": related,
+                    "original_row": row,
+                }
+            )
     return sorted(result, key=lambda r: (r["exit_time"], r["source_table"], str(r["trade_id"])))
 
 
-def capture(root: Path, config: Path, output: Path, *, experiment_id: str, run_id: str,
-            execution_mode: str, db_path: Path | None = None,
-            effective_config: Path | None = None):
+def capture(
+    root: Path,
+    config: Path,
+    output: Path,
+    *,
+    experiment_id: str,
+    run_id: str,
+    execution_mode: str,
+    db_path: Path | None = None,
+    effective_config: Path | None = None,
+):
     root = root.resolve()
     if git(root, "status", "--porcelain", "--untracked-files=normal"):
         raise ValueError("Commit all source changes before baseline capture")
@@ -90,39 +127,61 @@ def capture(root: Path, config: Path, output: Path, *, experiment_id: str, run_i
     effective = redact(json.loads(effective_config.read_text())) if effective_config else None
     schema, tables = read_database(db_path) if db_path else ([], {})
     closed = closed_records(tables)
-    source = {"commit": git(root, "rev-parse", "HEAD"),
-              "tree": git(root, "rev-parse", "HEAD^{tree}")}
+    source = {
+        "commit": git(root, "rev-parse", "HEAD"),
+        "tree": git(root, "rev-parse", "HEAD^{tree}"),
+    }
     payloads = {
         "config.redacted.json": config_data,
         "effective_config.redacted.json": effective,
-        "schema.json": schema, "tables.json": tables, "closed_trades.json": closed,
-        "environment.json": {"python": platform.python_version(),
-                             "platform": platform.platform(),
-                             "packages": sorted((d.metadata["Name"], d.version)
-                                                for d in importlib.metadata.distributions())},
+        "schema.json": schema,
+        "tables.json": tables,
+        "closed_trades.json": closed,
+        "environment.json": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "packages": sorted(
+                (d.metadata["Name"], d.version) for d in importlib.metadata.distributions()
+            ),
+        },
     }
-    coverage = {k: sum(r[k] is not None for r in closed) for k in
-                ("net_pnl", "fees", "funding", "slippage", "brain_decision_id", "exit_reason")}
-    blockers = ["Baseline decision/fill replay is not implemented until Phases 2-3",
-                "LLM reruns are not deterministic; preserve original responses for replay"]
+    coverage = {
+        k: sum(r[k] is not None for r in closed)
+        for k in ("net_pnl", "fees", "funding", "slippage", "brain_decision_id", "exit_reason")
+    }
+    blockers = [
+        "Baseline decision/fill replay is not implemented until Phases 2-3",
+        "LLM reruns are not deterministic; preserve original responses for replay",
+    ]
     if db_path is None:
         blockers.append("No production database supplied; this is a source-only capture")
     if effective is None:
         blockers.append("Effective runtime configuration/environment overrides not supplied")
     manifest = {
-        "format_version": 1, "experiment_id": experiment_id, "run_id": run_id,
-        "execution_mode": execution_mode, "source": source,
+        "format_version": 1,
+        "experiment_id": experiment_id,
+        "run_id": run_id,
+        "execution_mode": execution_mode,
+        "source": source,
         "declared_production_commit": None,
-        "input_fingerprint": digest({"source": source, "config": config_data,
-                                     "effective_config": effective, "schema": schema,
-                                     "tables": tables, "execution_mode": execution_mode,
-                                     "environment": payloads["environment.json"]}),
+        "input_fingerprint": digest(
+            {
+                "source": source,
+                "config": config_data,
+                "effective_config": effective,
+                "schema": schema,
+                "tables": tables,
+                "execution_mode": execution_mode,
+                "environment": payloads["environment.json"],
+            }
+        ),
         "files": {name: digest(value) for name, value in payloads.items()},
         "row_counts": {name: len(rows) for name, rows in tables.items()},
         "missing_tables": sorted(set(TABLES) - tables.keys()),
         "cost_and_attribution_coverage": coverage,
         "ledger_policy": "Separate source ledgers; do not aggregate both as unique trades",
-        "gate": "NOT_VALIDATED", "blockers": blockers,
+        "gate": "NOT_VALIDATED",
+        "blockers": blockers,
     }
     output.mkdir(parents=True, exist_ok=False)  # A frozen run is never overwritten.
     for name, value in {**payloads, "manifest.json": manifest}.items():
@@ -159,9 +218,16 @@ def main():
     p.add_argument("second", type=Path)
     args = parser.parse_args()
     if args.command == "capture":
-        result = capture(args.repo, args.config, args.output, experiment_id=args.experiment_id,
-                         run_id=args.run_id, execution_mode=args.execution_mode,
-                         db_path=args.db, effective_config=args.effective_config)
+        result = capture(
+            args.repo,
+            args.config,
+            args.output,
+            experiment_id=args.experiment_id,
+            run_id=args.run_id,
+            execution_mode=args.execution_mode,
+            db_path=args.db,
+            effective_config=args.effective_config,
+        )
         print(canonical(result))
     elif args.command == "verify":
         verify(args.capture)

@@ -75,3 +75,24 @@ Prompt-only rollback: set `no_trade_contract_enabled = false` in a **new** exper
 - Baseline decision/fill replay: pending Phase 2–3.
 - Paired current-prompt versus no-trade historical/shadow evaluation: pending data/framework.
 - Demo/small-live/normal-live promotion: not authorized by any evidence from this implementation.
+
+## Verified test results
+
+Python 3.12. Baseline targeted suite: 181 passed, 6 failed. Same suite plus 43 new
+tests: 224 passed, the identical 6 failures. Another 17 prompt-extension,
+compression and cycle regressions passed. Total changed-checkout result: 241
+passed, 6 pre-existing failures; zero new failures in the tested set.
+The full repository suite was not run. No network model/exchange calls were
+made by these tests. `test-results.json` lists exact baseline failure IDs.
+The existing failures concern prompt-size limits and stale count/skip wording;
+we leave the frozen control and its tests intact for review.
+
+Reproduce using Python 3.12 and `test-requirements.txt` in an isolated venv:
+
+```bash
+python -m pytest tests/test_expectancy_program tests/test_strategist_calla_skip.py tests/test_call_a_hang_guard.py tests/test_strat_call_pairing.py tests/test_strategist_callb_prompt.py tests/test_brain_thesis_invalidation_parsing.py tests/test_call_a_thesis_invalidation_prompt.py tests/test_layer2_defect2_brain_decisions.py tests/test_phase0/test_settings.py tests/test_stage2_phase3 -q
+python -m pytest tests/test_phase6_1d_briefing/test_prompt_extension_flag.py tests/test_phase4_layer1_restructure/test_cold_start_resume_enforcement.py tests/test_strategist_compression -q
+```
+
+The dependency snapshot is the **test environment**, not an assertion of deployed
+production dependencies; the original `requirements.freeze.txt` is unchanged.
