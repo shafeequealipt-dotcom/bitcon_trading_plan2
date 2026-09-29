@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "106fa9d29eda691fa37517323ba5b104afe88adf",
+  "baseline_scoped": {
+    "passed": 181,
+    "failed": 6
+  },
+  "changed_scoped": {
+    "passed": 226,
+    "failed": 6
+  },
+  "additional_regressions": {
+    "passed": 17,
+    "failed": 0
+  },
+  "new_tests": {
+    "passed": 45,
+    "failed": 0
+  },
+  "new_failure_ids": [],
+  "existing_failure_ids": [
+    "tests.test_call_a_thesis_invalidation_prompt::test_prompt_growth_bounded",
+    "tests.test_stage2_phase3.test_skip_rekey::test_rr_conflict_skip_and_fewer_than_three_retained",
+    "tests.test_stage2_phase3.test_strong_rule_softened.TestOperationalCapsPreserved::test_quality_conditioned_count_contract_present",
+    "tests.test_stage2_phase3.test_strong_rule_softened.TestZeroTradesReframedAsRare::test_rare_zero_framing_present",
+    "tests.test_stage2_phase3.test_zero_two_contract.TestZeroTwoConstantHasAggressiveFraming::test_two_to_four_range_with_rare_zero_or_one",
+    "tests.test_stage2_phase3.test_zero_two_contract.TestZeroTwoOperationalCapsPreserved::test_rule_1_reframes_two_to_four_range"
+  ],
+  "limitations": [
+    "Targeted regression set, not the full repository suite",
+    "No historical, shadow, demo or live performance experiment executed"
+  ]
+}

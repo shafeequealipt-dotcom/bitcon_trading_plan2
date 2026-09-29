@@ -923,6 +923,8 @@ class LayerManager:
                     self._current_plan.default_leverage = plan.default_leverage
                     self._current_plan.trailing_activation_pct = plan.trailing_activation_pct
                     self._current_plan.new_trades = plan.new_trades
+                    for field in ("reason_code", "experiment_id", "run_id", "decision_id"):
+                        setattr(self._current_plan, field, getattr(plan, field, ""))
                     self._current_plan.coin_directives = plan.coin_directives
                     self._current_plan.focus_coins = plan.focus_coins
                     self._current_plan.avoid_coins = plan.avoid_coins
@@ -1165,6 +1167,12 @@ class LayerManager:
             if not data_lake:
                 return
             new_trades = list(getattr(plan, "new_trades", []) or [])
+            provenance = {}
+            if getattr(plan, "reason_code", "") or getattr(plan, "experiment_id", ""):
+                provenance["full_response"] = json.dumps({
+                    field: getattr(plan, field, "")
+                    for field in ("reason_code", "experiment_id", "run_id", "decision_id")
+                })
             # Write the per-review row first (legacy contract preserved).
             asyncio.create_task(data_lake.write_claude_decision(
                 decision_type=decision_type,
@@ -1173,6 +1181,7 @@ class LayerManager:
                 market_view=getattr(plan, "market_view", "")[:200],
                 risk_level=getattr(plan, "risk_level", ""),
                 response_time_ms=elapsed_ms,
+                **provenance,
             ))
             # Write one row per trade directive Claude returned (D2).
             # Use a deterministic ts+symbol id so strategy_worker can

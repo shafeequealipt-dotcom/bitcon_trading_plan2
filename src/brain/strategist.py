@@ -23,6 +23,9 @@ import json
 import math
 import time
 
+from src.brain.no_trade_contract import build_no_trade_prompt, parse_reason
+from src.validation.experiment import DecisionJournal
+
 from src.core.log_context import ctx, new_decision_id, get_did
 from src.core.coin_package_validator import (
     SOURCE_FAILURE_MARKERS,
@@ -1060,6 +1063,7 @@ class ClaudeStrategist:
         self.claude = claude_client
         self.services = services
         self.settings = settings
+        self._decision_journal = None
         # Item 2 (entry-gaps investigation, 2026-05-26): boot sentinel for the
         # expected-winner-magnitude advisory. Confirms the flag state at boot.
         if getattr(getattr(settings, "brain", None),
@@ -1389,6 +1393,8 @@ class ClaudeStrategist:
 
     async def create_strategic_plan(self) -> StrategicPlan | None:
         """Build context, call Claude, parse plan."""
+        if getattr(self.settings.brain, "no_trade_contract_enabled", False) is True:
+            raise ValueError("no_trade_contract_enabled requires create_trade_plan (Call A)")
         _cycle_start = time.time()
         did = new_decision_id()
         log.info(f"STRAT_CYCLE_START | did={did} | {ctx()}")
@@ -1509,8 +1515,21 @@ class ClaudeStrategist:
         _trades_count = 0
         _prompt_chars = 0
         _sys_prompt_chars = 0
+        _no_trade = getattr(self.settings.brain, "no_trade_contract_enabled", False) is True
+        _journal = None
+        prompt = system = raw_response = ""
+        reason_code = ""
 
         try:
+            audit_dir = getattr(self.settings.brain, "validation_audit_dir", "")
+            if isinstance(audit_dir, str) and audit_dir:
+                if self._decision_journal is None:
+                    self._decision_journal = DecisionJournal(
+                        audit_dir, self.settings.brain.validation_experiment_id,
+                        self.settings.brain.validation_run_id, self.settings,
+                    )
+                _journal = self._decision_journal
+                _journal.assert_config(self.settings)
             # Post-Execution Closure Fix Phase 3 (2026-05-05) — skip CALL_A
             # entirely when the scanner has produced zero packages. Without
             # packages there is nothing to exploit, and historically Claude
@@ -1535,6 +1554,15 @@ class ClaudeStrategist:
                                 f"did={did} | {ctx()}"
                             )
                             _status = "skipped"
+                            if _no_trade:
+                                reason_code = "NO_TRADE_WEAK_EDGE"
+                                plan = StrategicPlan(
+                                    new_trades=[], reason_code=reason_code, decision_id=did,
+                                    market_view="No eligible candidate packages available",
+                                    experiment_id=_journal.experiment_id if _journal else "",
+                                    run_id=_journal.run_id if _journal else "",
+                                )
+                                return plan
                             return None
             except Exception as e:
                 # Pre-check failure must NOT abort the cycle — fall through
@@ -1572,8 +1600,11 @@ class ClaudeStrategist:
             # values and getattr covers a missing field, so a configured
             # 0 (e.g. thin_vol_ratio = 0 to disable the volume leg)
             # stays configurable (cross-check fix, 2026-06-11).
+            base_system = TRADE_SYSTEM_PROMPT_ZERO_TWO if _zero_two else TRADE_SYSTEM_PROMPT
+            if _no_trade:
+                base_system = build_no_trade_prompt(base_system)
             system = _resolve_prompt_calibration(
-                TRADE_SYSTEM_PROMPT_ZERO_TWO if _zero_two else TRADE_SYSTEM_PROMPT,
+                base_system,
                 thin_vol_ratio=float(getattr(
                     _brain_cfg_cal, "quality_skip_thin_vol_ratio", 0.25,
                 )),
@@ -1597,7 +1628,11 @@ class ClaudeStrategist:
             if bool(getattr(
                 self.settings.brain, "surface_briefing_fields", False,
             )):
-                system += BRIEFING_SYSTEM_PROMPT_SUFFIX
+                suffix = BRIEFING_SYSTEM_PROMPT_SUFFIX
+                if _no_trade:
+                    suffix = suffix.replace("you SHOULD\nspot edges the system missed",
+                                            "you may conclude that no supported edge exists")
+                system += suffix
             if self._has_urgent_concerns:
                 system += (
                     '\n\nOVERRIDE — URGENT WATCHDOG ALERTS:\n'
@@ -1628,7 +1663,7 @@ class ClaudeStrategist:
                 f"STRAT_AGGRESSIVE_FRAMING | mode_line=skipped "
                 f"coaching=skipped fund_rules=minimal "
                 f"today_perf=skipped dir_perf=skipped "
-                f"regime_instr=symmetric contract=aggressive_exploit "
+                f"regime_instr=symmetric contract={'no-trade-v1' if _no_trade else 'aggressive_exploit'} "
                 f"zero_two_flag={_zero_two} | {ctx()}"
             )
 
@@ -1640,6 +1675,11 @@ class ClaudeStrategist:
                 plan_data = json.loads(raw_response)
 
             plan = self._parse_trade_plan(plan_data)
+            reason_code = getattr(plan, "reason_code", "")
+            plan.decision_id = did
+            if _journal:
+                plan.experiment_id = _journal.experiment_id
+                plan.run_id = _journal.run_id
 
             # Mid-Hold Trade Management Fix Phase 3.7 — Claude has now
             # seen any thesis_events that were rendered into the prompt.
@@ -1688,7 +1728,7 @@ class ClaudeStrategist:
             # WITHOUT a count quota (zero is still correct on a genuinely flat
             # tape). Pure read over plan.new_trades; never raises from the log.
             try:
-                _bc = getattr(getattr(self.settings, "brain", None), "brain_target_play_count", 3)
+                _bc = "none" if _no_trade else getattr(getattr(self.settings, "brain", None), "brain_target_play_count", 3)
                 _ph = getattr(getattr(self.settings, "brain", None), "brain_preferred_hold_minutes_max", 25)
                 _nt = [t for t in plan.new_trades if isinstance(t, dict)]
                 _buys = sum(1 for t in _nt if str(t.get("direction", "")).lower() in ("buy", "long"))
@@ -1713,7 +1753,7 @@ class ClaudeStrategist:
                 log.debug(f"STRAT_CALL_A_ACTIVITY_FAIL | err='{str(_ae)[:80]}'")
 
             if not plan.new_trades:
-                log.warning(f"STRAT_CALL_A_NO_TRADES | view='{str(plan.market_view)[:100]}' | {ctx()}")
+                (log.info if _no_trade else log.warning)(f"STRAT_CALL_A_NO_TRADES | reason={reason_code} view='{str(plan.market_view)[:100]}' | {ctx()}")
                 # Stage 2 phase 3 — under the bounded-count contract
                 # (range=2-4 since 2026-05-05; was 1-2), an empty
                 # response is the system working as designed (Claude
@@ -1721,13 +1761,17 @@ class ClaudeStrategist:
                 # Surface this explicitly so operators distinguish
                 # "intentional skip" from "parse failure / brain
                 # regression".
-                if _zero_two:
+                if _zero_two or _no_trade:
                     log.info(
                         f"STRAT_ZERO_TRADES_INTENTIONAL "
                         f"| view='{str(plan.market_view)[:120]}' "
-                        f"contract=2_4 | {ctx()}"
+                        f"contract={'no-trade-v1' if _no_trade else '2_4'} | {ctx()}"
                     )
 
+            if _journal:
+                _journal.assert_config(self.settings)
+                _journal.record(did, prompt=prompt, system=system, response=raw_response,
+                                reason_code=reason_code, status="success")
             _trades_count = len(plan.new_trades)
             return plan
 
@@ -1743,6 +1787,12 @@ class ClaudeStrategist:
             _status = "cancelled"
             raise
         finally:
+            if _journal and _status != "success":
+                try:
+                    _journal.record(did, prompt=prompt, system=system, response=raw_response,
+                                    reason_code=reason_code, status=_status)
+                except Exception as audit_error:
+                    log.error(f"EXPERIMENT_AUDIT_FAIL | did={did} err={type(audit_error).__name__}")
             _elapsed = (time.time() - _cycle_start) * 1000
             log.info(
                 f"STRAT_CALL_A_END | el={_elapsed:.0f}ms status={_status} "
@@ -6403,6 +6453,10 @@ class ClaudeStrategist:
             pass
         if _a_el_ms > 5000:
             log.warning(f"STRAT_CALL_A_CTX_SLOW | el={_a_el_ms:.0f}ms sections={len(sections)} | {ctx()}")
+        if getattr(self.settings.brain, "no_trade_contract_enabled", False) is True:
+            _prompt = _prompt.replace("trade each coin on ITS OWN", "evaluate each coin on ITS OWN")
+            _prompt = _prompt.replace("scalp mode — both directions, tight TP",
+                                      "low liquidity — NO_TRADE is normal")
         return _prompt
 
     # ═══ CALL B: Position management prompt builder ═══
@@ -7417,7 +7471,10 @@ class ClaudeStrategist:
 
     def _parse_trade_plan(self, data: dict) -> StrategicPlan:
         """Parse Call A response — new_trades only, no position_actions."""
+        brain = getattr(getattr(self, "settings", None), "brain", None)
+        reason = parse_reason(data) if getattr(brain, "no_trade_contract_enabled", False) is True else ""
         plan = StrategicPlan(
+            reason_code=reason,
             market_view=data.get("market_view", ""),
             risk_level=data.get("risk_level", "normal"),
             max_positions=_safe_int(data.get("max_positions"), 4),

@@ -70,6 +70,12 @@ class StrategicPlan:
     # Claude's direct trade commands (new_trades from response)
     new_trades: list[dict] = field(default_factory=list)
 
+    # Experiment provenance (empty for legacy/uninstrumented callers).
+    reason_code: str = ""
+    experiment_id: str = ""
+    run_id: str = ""
+    decision_id: str = ""
+
     # Metadata
     created_at: float = 0.0
     created_at_dt: datetime = field(

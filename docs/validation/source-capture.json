@@ -1,0 +1,16 @@
+{
+  "source": {
+    "commit": "106fa9d29eda691fa37517323ba5b104afe88adf",
+    "tree": "e22bb0632a8d59201bbeda2340ae31962da4263f"
+  },
+  "input_fingerprint": "4b7f2b8910d24c8561c6ab88c7d16a5ff10b24171a880c86ea918754ad084770",
+  "gate": "NOT_VALIDATED",
+  "blockers": [
+    "Baseline decision/fill replay is not implemented until Phases 2-3",
+    "LLM reruns are not deterministic; preserve original responses for replay",
+    "No production database supplied; this is a source-only capture",
+    "Effective runtime configuration/environment overrides not supplied"
+  ],
+  "capture_tool_sha256": "357d760fc4110ce910d477ec7eff6cc2c13b987c72f13db75305faa378d4b017",
+  "repeated_capture_identical": true
+}
