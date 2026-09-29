@@ -1,0 +1,49 @@
+[Unit]
+Description=Trading Intelligence - Background Workers
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=ubuntu
+WorkingDirectory=/home/ubuntu/trading-bot
+Environment=PATH=/home/ubuntu/trading-bot/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=LANG=C.UTF-8
+Environment=DISABLE_UPDATES=1
+EnvironmentFile=/home/ubuntu/trading-bot/.env
+ExecStart=/home/ubuntu/trading-bot/.venv/bin/python workers.py
+Restart=always
+RestartSec=15
+
+# 2026-08-01 hang fix (Phase 2 of the pybit-freeze root-cause fix): the
+# 2026-07-27 -> 08-01 ~5-day silent hang went undetected because
+# systemd saw a live PID and every in-process watchdog was itself a
+# task on the SAME frozen event loop. Type=notify + WatchdogSec moves
+# detection outside the process: workers.py calls sd_notify READY=1 on
+# boot and WorkerManager._system_health_loop pings WATCHDOG=1 every
+# ~60s (the one task documented to stay reactive even when every
+# worker is stuck). If those pings stop for WatchdogSec, systemd kills
+# and restarts us -- external to whatever wedged, so it can't freeze
+# with it. WatchdogSec=180 gives 3x margin over the ~60s ping cadence.
+# WatchdogSignal=SIGABRT (default would be SIGTERM) pairs with the
+# faulthandler.register(SIGABRT) hook added in workers.py's
+# _install_shutdown_hooks, so a watchdog-triggered kill leaves a full
+# all-threads stack dump in data/logs/watchdog_crash_dump.log --
+# automatic forensic evidence instead of needing a live py-spy dump
+# within the freeze window, which is what made this hang take 5 days
+# to even notice, let alone diagnose.
+WatchdogSec=180
+WatchdogSignal=SIGABRT
+
+MemoryMax=12G
+MemoryHigh=8G
+CPUQuota=80%
+NoNewPrivileges=true
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
