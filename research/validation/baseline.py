@@ -14,7 +14,7 @@ import subprocess
 import tomllib
 from pathlib import Path
 
-from src.core.experiment import canonical, digest, redact
+from src.validation.experiment import canonical, digest, redact
 
 TABLES = (
     "schema_version",
@@ -164,6 +164,7 @@ def capture(
         "execution_mode": execution_mode,
         "source": source,
         "declared_production_commit": None,
+        "capture_tool_sha256": digest(Path(__file__).read_text()),
         "input_fingerprint": digest(
             {
                 "source": source,

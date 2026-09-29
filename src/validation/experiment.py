@@ -85,6 +85,20 @@ class DecisionJournal:
                 text=True,
                 timeout=5,
             ).strip()
+            dirty = subprocess.check_output(
+                [
+                    "git",
+                    "-C",
+                    str(Path(__file__).resolve().parents[2]),
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=normal",
+                ],
+                text=True,
+                timeout=5,
+            ).strip()
+            if dirty:
+                raise ValueError("Commit source/config changes before starting an experiment")
         except (OSError, subprocess.SubprocessError):
             raise ValueError("An experiment journal requires a versioned source checkout")
         self.revision = revision

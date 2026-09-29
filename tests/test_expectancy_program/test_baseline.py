@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from research.validation.baseline import capture, closed_records, read_database, verify
-from src.core.experiment import DecisionJournal, redact
+from src.validation.experiment import DecisionJournal, redact
 
 
 def test_redaction_nested_and_token_budget():
@@ -148,3 +148,26 @@ def test_journal_immutable_identity_and_config(tmp_path):
 def test_journal_rejects_unsafe_identity(tmp_path, name):
     with pytest.raises(ValueError):
         DecisionJournal(tmp_path, name, "run", config())
+
+
+def test_cli_needs_no_third_party_imports():
+    import sys
+    from pathlib import Path
+
+    result = subprocess.run(
+        [sys.executable, "-S", "-m", "research.validation.baseline", "--help"],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "capture" in result.stdout
+
+
+def test_journal_rejects_unversioned_source(tmp_path, monkeypatch):
+    outputs = iter(["abc123", " M changed.py"])
+    monkeypatch.setattr(
+        "src.validation.experiment.subprocess.check_output", lambda *args, **kwargs: next(outputs)
+    )
+    with pytest.raises(ValueError, match="Commit source"):
+        DecisionJournal(tmp_path, "trial", "a", config())

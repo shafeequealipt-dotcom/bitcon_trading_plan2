@@ -24,7 +24,7 @@ import math
 import time
 
 from src.brain.no_trade_contract import build_no_trade_prompt, parse_reason
-from src.core.experiment import DecisionJournal
+from src.validation.experiment import DecisionJournal
 
 from src.core.log_context import ctx, new_decision_id, get_did
 from src.core.coin_package_validator import (

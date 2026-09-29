@@ -5,7 +5,7 @@
     "failed": 6
   },
   "changed_scoped": {
-    "passed": 224,
+    "passed": 226,
     "failed": 6
   },
   "additional_regressions": {
@@ -13,7 +13,7 @@
     "failed": 0
   },
   "new_tests": {
-    "passed": 43,
+    "passed": 45,
     "failed": 0
   },
   "new_failure_ids": [],

@@ -57,7 +57,7 @@ validation_run_id = "shadow-run-001"
 validation_audit_dir = "validation_runs/decisions"
 ```
 
-Use a new run ID on restart and a new experiment ID for changes to code/config/prompt. Journals capture exact input and output text, prompt hashes, configured model/settings, decision ID and reason code. `opportunity_id` hashes the supplied user-context string: feed both arms exactly the same frozen context for paired comparison. It is not a replacement for Phase 2's full candidate snapshot or actual provider/fallback model metadata.
+Start from a clean committed checkout (journaling rejects unversioned source/config changes). Use a new run ID on restart and a new experiment ID for changes to code/config/prompt. Journals capture exact input and output text, prompt hashes, configured model/settings, decision ID and reason code. `opportunity_id` hashes the supplied user-context string: feed both arms exactly the same frozen context for paired comparison. It is not a replacement for Phase 2's full candidate snapshot or actual provider/fallback model metadata.
 
 For control runs use the same audit settings with a separate experiment ID and the flag false. Journal failures fail the affected Call A (no new plan); they do not change the independent watchdog or Call B. Without an audit directory, journaling is disabled and legacy behavior is preserved. Do not claim unaudited runs satisfy validation.
 
@@ -78,9 +78,9 @@ Prompt-only rollback: set `no_trade_contract_enabled = false` in a **new** exper
 
 ## Verified test results
 
-Python 3.12. Baseline targeted suite: 181 passed, 6 failed. Same suite plus 43 new
-tests: 224 passed, the identical 6 failures. Another 17 prompt-extension,
-compression and cycle regressions passed. Total changed-checkout result: 241
+Python 3.12. Baseline targeted suite: 181 passed, 6 failed. Same suite plus 45 new
+tests: 226 passed, the identical 6 failures. Another 17 prompt-extension,
+compression and cycle regressions passed. Total changed-checkout result: 243
 passed, 6 pre-existing failures; zero new failures in the tested set.
 The full repository suite was not run. No network model/exchange calls were
 made by these tests. `test-results.json` lists exact baseline failure IDs.
@@ -96,3 +96,7 @@ python -m pytest tests/test_phase6_1d_briefing/test_prompt_extension_flag.py tes
 
 The dependency snapshot is the **test environment**, not an assertion of deployed
 production dependencies; the original `requirements.freeze.txt` is unchanged.
+
+The source-only CLI capture was also run twice against the exact copied baseline;
+`compare` verified identical captured inputs. No production database was involved.
+`source-capture.json` records the input fingerprint and unresolved gates.
