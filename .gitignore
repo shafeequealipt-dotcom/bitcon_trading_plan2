@@ -91,3 +91,6 @@ research/paper_trade/data/*.db
 research/paper_trade/data/*.db-wal
 research/paper_trade/data/*.db-shm
 research/paper_trade/logs/*.log
+
+# Private frozen validation captures and decision records
+validation_runs/
